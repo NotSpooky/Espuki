@@ -1,7 +1,7 @@
-(declaim (optimize (debug 3)))
+;(declaim (optimize (debug 3)))
 
 
-(setf *trace-output* (open "log.txt" :direction :output))
+;(setf *trace-output* (open "log.txt" :direction :output))
 ;(defun chain (functionCalls)
 ;  (assert (listp functionCalls) (functionCalls))
 ;  (if (cdr functionCalls)
@@ -63,16 +63,12 @@
 
 (defun processTree (&rest tree)
   (map nil #'(lambda (branch)
-    ;(progn
-    ;(format t "~A" "Processing: ")
-    ;(format t "~A~%" branch)
     (cond ((stringp branch)(sink branch))                   ; Just output as format string
           ((numberp branch)(sink (write-to-string branch))) ; Make string
           ((eql branch nil)nil)                             ; Ignore
           ((listp branch)(apply (car branch)(cdr branch)))  ; Recurse
           (t (call (string branch)))                        ; Take symbol as function call
     )
-    ;)
   ) tree)
 )
 
@@ -80,15 +76,24 @@
   (processTree lhs " " op " " rhs)
 )
 
-(defun call (funName &optional args)
+(defun unOp (lhs op)
+  (processTree lhs " " op)
+)
+
+(defun assign (lhs rhs)
+  (binOp lhs "=" rhs)
+)
+
+(defun seqn (&rest args)
+  (mapcar #'(lambda (arg) (processTree arg ";~%")) args)
+)
+
+(defun call (funName &optional &rest args)
   ;(assert (listp args))
   (assert (stringp funName))
   (processTree funName "(")
   (if (not (null args))
-    (progn
-      (assert (eq (car args) 'n-arglist))
-      (processTree args)
-    )
+    (apply 'n-arglist args)
  )
   (processTree ")")
 )
@@ -111,16 +116,19 @@
 (defun funDecl (returnType name args body)
   (assert (stringp name))
   (assert (listp args))
-  (assert (eq (car args) 'n-arglist))
-  (processTree returnType " " name " (" args "){~%" body "~%}~%")
+  (processTree returnType " " name " (")
+  (if (not (null args))
+    (apply 'n-arglist args)
+  )
+  (processTree "){~%" body "~%}~%")
 )
 
 (defun importDecl (name)
   (assert (stringp name))
-  (processTree "import " name ";~%")
+  (processTree "import " name)
 )
 
-(setq lastId 0)
+(defvar lastId 0)
 
 (defun newVar ()
   (progn
@@ -129,27 +137,36 @@
   )
 )
 
-(defun idx (var index)
-  (processTree var "[" index "]")  
-  )
+(defvar structs ())
 
-
-(setq structs ())
-
-(defun struct (name fields)
+(defun n-struct (name fields)
   (assert (stringp name))
   (processTree "struct " name " {~%" fields "~%}~%")
   (setq structs (push name structs))
 )
 
-(defun varDecl (&optional initialValue typename)
-  (processTree (
-    if (null typename) "auto" typename)
-    " " (newVar)
-    (if (null initialValue) ";~%" (concatenate 'string " = " initialValue ";~%"))
+(defun varDecl (&optional initialValue typename name)
+  (let ((retVal (if name name (newVar)))) ; Use name or autogenerate one
+    (processTree (
+      if (null typename) "auto" typename)
+      " " retVal
+    )
+    (if (not(null initialValue)) (processTree " = " initialValue))
+    retVal
   )
 )
 
+(defun arrType (typeName &optional staticSize)
+  (format nil "~A[~A]" typeName (if staticSize  staticSize ""))
+)
+
+(defun incr (var)
+  (processTree var "++")
+)
+
+(defun slice (var &optional (initial 0) (ending "$"))
+  (processTree var "[" initial ".." ending "]")
+)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;; Sugar ;;;;;;;;;;;
@@ -160,43 +177,102 @@
 )
 
 
-(defun increasing (up-to body)
-  (let ((varName (newVar)))
+(defun increasing (up-to body &key varname)
+  ; Use varName if it exists, create a new one otherwise.
+  (let ((varName (if varname varname (newVar))))
     (for
-      (concatenate 'string "uint " varName " = 0")
-      (concatenate 'string varName " < " (write-to-string up-to))
-      (concatenate 'string varName "++")
+      `(varDecl "0" "uint" ,varName)
+      `(binOp ,varName "<" ,up-to)
+      `(incr ,varName)
       body
     )
   )
+)
+
+(defun n-member (source memberName)
+  (processTree source "." memberName)
+)
+
+(defun idx (source index)
+  (processTree source "[" index "]")
 )
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;; Neural network ;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defun denseForward ()
-  (processTree '(foreach "i" (call "iota" (n-arglist "4")) nue))
+(defun neuron-fw (inputs weights output)
+  (seqn
+    '(importDecl "std.numeric : dotProduct")
+    `(assign ,output (call "dotProduct" ,weights ,inputs))
+  )
 )
 
+(defun dense-fw (inputs weights outputs)
+  ;(defun for (decl conditions post body)
+  (let ((pos (newVar)))
+    (increasing
+      `(n-member ,weights "length")
+      `(neuron-fw (idx ,inputs ,pos) (idx ,weights ,pos) (idx ,outputs ,pos))
+      :varname pos
+    )
+  )
+)
+
+#|(defun dense-bw (deltaOutput average optimizer errorOfInput)
+  ()
+)|#
+
+(defmacro l1 (fundecl)
+  (let ((sym (gensym)))
+    `(lambda (,sym) (-> ,sym ,fundecl))
+  )
+)
+
+(defun bias-fw (inputs biases outputs)
+  (seqn `(assign ,outputs (binOp ,inputs "+" ,biases)))
+)
+
+(defun activation-fw (data activation)
+  (seqn `(assign ,data (call ,activation ,data)))
+)
+
+(defun bias-bw (deltaOutput)
+  deltaOutput
+)
+
+;(dense-fw "inputs" "weights" "outputs")
+(bias-fw "inputs" "biases" "outputs")
 
 #|
 (processTree "// Hello ~%")
 (processTree nil)
 (processTree '(importDecl "std.stdio"))
 (processTree '(binOp "var1" "=" "var2") "~%")
-(processTree '(foreach "el" "range" (call "writeln" (n-arglist "el" "`\n`"))))
-(processTree '(funDecl "void" "main" (n-arglist "string[] args") (call "writeln" (n-arglist "args[0]"))))
+(processTree '(foreach "el" "range" (call "writeln" ("el" "`\n`"))))
+(processTree '(funDecl "void" "main" ("string[] args") (call "writeln" ("args[0]"))))
 (processTree '(for "int i = 0" "i<5" "i++" (call "testfun")))
-(denseForward)
 ;(trace increasing)
 (increasing 3 'writeln)
 (idx "varIdx" 4)
-|#
-(struct "Neural" "int a; double b;")
-(struct "Neural2" "int a; double b;")
+(n-struct "Neural" "int a; double b;")
+(n-struct "Neural2" "int a; double b;")
 (print structs)
 (varDecl "5" "int")
 (varDecl nil "double")
 (varDecl)
 (varDecl "6")
+(varDecl 'readln)
+|#
+
+#|
+(defvar networkType "float")
+(defvar connections 32)
+(defvar inputType (arrType networkType connections))
+(let ((weights "weights") (inputs "inputs") (outputs "outputs"))
+  (seqn
+    `(varDecl "[]" ,inputType ,weights)
+    `(neuron-fw ,inputs ,weights ,outputs)
+  )
+)
+|#
