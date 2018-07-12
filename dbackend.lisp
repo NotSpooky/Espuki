@@ -1,5 +1,4 @@
-;(declaim (optimize (debug 3)))
-
+(load "macros.lisp")
 
 ;(setf *trace-output* (open "log.txt" :direction :output))
 ;(defun chain (functionCalls)
@@ -21,47 +20,27 @@
   )
 )
 
-; Obtained from https://stackoverflow.com/questions/11073250/tacit-programming-in-lisp?noredirect=1&lq=1
-; Author: Miron Brezuleanu
-(defmacro -> (obj &rest forms)
-  "Similar to the -> macro from clojure, but with a tweak: if there is
-  a $ symbol somewhere in the form, the object is not added as the
-  first argument to the form, but instead replaces the $ symbol."
-  (if forms
-      (if (consp (car forms)) ; It's a list (non null)
-          (let* ((first-form (first forms))
-                 (other-forms (rest forms))
-                 (pos (position '$ first-form)))
-            (if pos
-                `(-> ,(append (subseq first-form 0 pos)
-                              (list obj)
-                              (subseq first-form (1+ pos)))
-                     ,@other-forms)
-                `(-> ,(list* (first first-form) obj (rest first-form))
-                     ,@other-forms)))
-          `(-> ,(list (car forms) obj) ; Make into a list
-               ,@(cdr forms)))
-      obj)
-)
-
-; Executes functions with value as parameter
-(defun split (value &rest functions)
-  (progn (mapcar #'(lambda (fun) (funcall fun value)) functions))
-)
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;; Codegen ;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defun sink (&rest text)
+  "Used for outputting generated text.
+  If it's a string, it's used as a format string, allowing using for example ~%.
+  If it isn't it's pretty printed to the output."
   (map nil #'(lambda (arg)
-    (cond ((stringp arg)(format t arg)) ; Allows using things like ~%
+    (cond ((stringp arg)(format t arg))
           (t (format t "~A" arg))
     )
   ) text)
 )
 
 (defun processTree (&rest tree)
+  "Takes an AST, processes it and outputs it.
+  In case it's a string it's outputted as a format string.
+  Numbers are outputted as-is.
+  Lists with a function name as head are called.
+  Nils are ignored."
   (map nil #'(lambda (branch)
     (cond ((stringp branch)(sink branch))                   ; Just output as format string
           ((numberp branch)(sink (write-to-string branch))) ; Make string
@@ -73,23 +52,28 @@
 )
 
 (defun binOp (lhs op rhs)
+  "Binary operation."
   (processTree lhs " " op " " rhs)
 )
 
 (defun unOp (lhs op)
+  "Unary operation."
   (processTree lhs " " op)
 )
 
 (defun assign (lhs rhs)
+  "Variable assignment."
   (binOp lhs "=" rhs)
 )
 
 (defun seqn (&rest args)
+  "Sequence of statements.
+  Usually separated by ; or newlines"
   (mapcar #'(lambda (arg) (processTree arg ";~%")) args)
 )
 
 (defun call (funName &optional &rest args)
-  ;(assert (listp args))
+  "Function call"
   (assert (stringp funName))
   (processTree funName "(")
   (if (not (null args))
@@ -107,6 +91,7 @@
 )
 
 (defun n-arglist (&rest args)
+  "List of arguments, for example for function calls."
   (interlacedEach
     args 
     #'(lambda (arg) (processTree arg))
@@ -131,6 +116,7 @@
 (defvar lastId 0)
 
 (defun newVar ()
+  "Returns a new variable name"
   (progn
     (setq lastId (+ lastId 1))
     (concatenate 'string "var" (write-to-string lastId))
@@ -140,12 +126,17 @@
 (defvar structs ())
 
 (defun n-struct (name fields)
+  "Structure declaration"
   (assert (stringp name))
   (processTree "struct " name " {~%" fields "~%}~%")
   (setq structs (push name structs))
 )
 
 (defun varDecl (&optional initialValue typename name)
+  "Declare a new variable.
+  If initialValue isn't provided, the variable isn't initialized.
+  If typename isn't provided, the variable is given a generic/inferred type.
+  If name is not provided, a new one is auto generated."
   (let ((retVal (if name name (newVar)))) ; Use name or autogenerate one
     (processTree (
       if (null typename) "auto" typename)
@@ -157,10 +148,13 @@
 )
 
 (defun arrType (typeName &optional staticSize)
+  "Generates a type name consisting of an array of element type typeName.
+  staticSize is used when a static array is desired, it's the amount of elements."
   (format nil "~A[~A]" typeName (if staticSize  staticSize ""))
 )
 
 (defun incr (var)
+  "Operation that increases in 1 the variable named var"
   (processTree var "++")
 )
 
@@ -222,12 +216,6 @@
 #|(defun dense-bw (deltaOutput average optimizer errorOfInput)
   ()
 )|#
-
-(defmacro l1 (fundecl)
-  (let ((sym (gensym)))
-    `(lambda (,sym) (-> ,sym ,fundecl))
-  )
-)
 
 (defun bias-fw (inputs biases outputs)
   (seqn `(assign ,outputs (binOp ,inputs "+" ,biases)))
