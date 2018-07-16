@@ -1,6 +1,6 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
-
+#include "clickablescene.h"
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -8,10 +8,10 @@ MainWindow::MainWindow(QWidget *parent) :
 {
     ui->setupUi(this);
     this->show();
-    scene = new QGraphicsScene();
+    scene = new ClickableScene();
     ui->graphicsView->setScene(scene);
     view = ui->graphicsView;
-    view->fitInView(view->sceneRect());
+    //view->fitInView(scene->sceneRect());
 }
 
 MainWindow::~MainWindow()
