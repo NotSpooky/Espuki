@@ -28,16 +28,20 @@ SOURCES += \
         mainwindow.cpp \
     diagramscene.cpp \
     clickablescene.cpp \
-    clickablelabel.cpp
+    mainlisp.cpp \
+    node.cpp
 
 HEADERS += \
         mainwindow.h \
     diagramscene.h \
     clickablescene.h \
-    clickablelabel.h
+    mainlisp.h \
+    node.h
 
 FORMS += \
         mainwindow.ui \
     nodeeditor.ui
 
 DISTFILES +=
+
+unix|win32: LIBS += -lecl

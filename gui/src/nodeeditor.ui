@@ -15,11 +15,15 @@
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
-    <widget class="QLabel" name="inputs">
-     <property name="text">
-      <string>(No inputs)</string>
-     </property>
-    </widget>
+    <layout class="QHBoxLayout" name="inputsLayout">
+     <item>
+      <widget class="QPushButton" name="addInput">
+       <property name="text">
+        <string>Add input</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
    </item>
    <item>
     <widget class="QTextEdit" name="textEdit"/>
@@ -33,6 +37,10 @@
    </item>
   </layout>
  </widget>
+ <tabstops>
+  <tabstop>textEdit</tabstop>
+  <tabstop>addInput</tabstop>
+ </tabstops>
  <resources/>
  <connections>
   <connection>
