@@ -73,6 +73,15 @@ struct NodeEditor {
         // On accept, use the data in the traking vector to update the inputs in the main interface.
         baseWidget->connect(this->ui.buttonBox, &QDialogButtonBox::accepted, [this, node]() {
             node->setText(this->ui.textEdit->toPlainText());
+            foreach (auto newInputData, this->inputTracker) {
+                auto text = newInputData.name;
+                if(!newInputData.guiElement) {
+                    auto newInputLabel = new QLabel();
+                    node->inputs->addWidget(newInputLabel);
+                    newInputData.guiElement = newInputLabel;
+                }
+                newInputData.guiElement->setText(text);
+            }
             this->baseWidget->close();
         });
         baseWidget->show();
