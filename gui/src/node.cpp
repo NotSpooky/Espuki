@@ -24,7 +24,7 @@ Node::Node(): QWidget(nullptr) {
 
 
 struct EditorInput {
-    QString name = "Test text"; // The text inside.
+    QString name = ""; // The text inside.
     // Updated after user accepts.
     // If null, then a new one must be created.
     QLabel * guiElement;
@@ -49,12 +49,19 @@ struct NodeEditor {
         this->ui.textEdit->setText(node->text);
 
         // On creation, add the input labels as input text edits.
-        foreach (auto input, node->inputs->children()){
-            auto childLabel = qobject_cast<QLabel*> (input);
+        //printf("Amount of children: %d\n\n", node->inputs->children().length());
+        // Cannot use node->inputs->children() because the subnodes aren't children of the layout but of the widget.
+        for (int inputPos = 0; inputPos < node->inputs->count(); inputPos++) {
+            auto childLabel = qobject_cast<QLabel*> (node->inputs->itemAt(inputPos)->widget());
+            printf("\n\n%p\n\n", (void*) childLabel);
             if (childLabel != nullptr) {
                 // And also keep track of them so that changes can be applied on accept.
+                auto inputLabel = new QLineEdit();
                 this->inputTracker.push_back(EditorInput(childLabel));
-                auto inputLabel = new QLabel();
+                inputLabel->connect(inputLabel, &QLineEdit::textChanged, [inputLabel, inputPos, this] () {
+                    assert(inputTracker.size() > inputPos);
+                    this->inputTracker[inputPos].name = inputLabel->text();
+                });
                 inputLabel->setText(childLabel->text());
                 this->ui.inputsLayout->addWidget(inputLabel);
             }
