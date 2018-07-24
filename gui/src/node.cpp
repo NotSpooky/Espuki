@@ -62,12 +62,16 @@ struct NodeEditor {
 
         // When the add input button is clicked, an editor for that input is created.
         baseWidget->connect(this->ui.addInput, &QPushButton::clicked, [this] () {
-            auto inputPos = this->ui.inputsLayout->count();
+            auto inputPos = this->ui.inputsLayout->count() - 1;
             auto newInput = new QLineEdit ();
-            newInput->setText(QString::fromStdString("_" + std::to_string(inputPos)));
+            this->inputTracker.push_back(EditorInput(nullptr));
+            newInput->connect(newInput, &QLineEdit::textChanged, [newInput, inputPos, this] () {
+                assert(inputTracker.size() > inputPos);
+                this->inputTracker[inputPos].name = newInput->text();
+            });
+            newInput->setText(QString::fromStdString("_" + std::to_string(inputPos + 1)));
             this->ui.inputsLayout->addWidget(newInput);
             // It is also added to the tracking vector.
-            this->inputTracker.push_back(EditorInput(nullptr));
         });
 
         // On accept, use the data in the traking vector to update the inputs in the main interface.
