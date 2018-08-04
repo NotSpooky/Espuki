@@ -11,29 +11,6 @@
 #include <iostream>
 #include "node.h"
 
-void drawLine (QGraphicsScene &scene, QPointF initialPoint, QPointF endPoint) {
-    auto line = scene.addLine(initialPoint.x(),initialPoint.y(),endPoint.x(), endPoint.y());
-    // Draw in background so that text items appear on top.
-    // It seems there's something else for background items.
-    line->setZValue(-1);
-}
-
-enum Slot {top, bottom};
-
-// Gets the position on the scene of the top/bottom of an item.
-// firstAncestor is the first parent that is on the GraphicsScene.
-auto pos (Slot slot, QTextEdit & text, QGraphicsItem & firstAncestorItem, QWidget & firstAncestor) {
-    auto size = text.size();
-    return firstAncestorItem.mapFromScene(
-        text.mapTo(
-            &firstAncestor, QPoint(
-                size.width() / 2
-                , slot == top ? 0 : size.height()
-            )
-        )
-    );
-}
-
 
 #include "mainlisp.h"
 int main(int argc, char *argv[])
@@ -60,14 +37,19 @@ int main(int argc, char *argv[])
     //auto nodeText = "";
     w.view->fitInView(w.view->sceneRect(), Qt::KeepAspectRatio);
     w.scene->onClick = [&](QGraphicsSceneMouseEvent* event) {
-        auto pos = event->scenePos();
-        auto node = new Node();
-        auto added = w.scene->addWidget(node);
-        auto size = node->size();
-        // Prevent activation of other widgets in this position.
-        // If this is problematic, can try with sceneEventFilter.
-        added->setPanelModality(QGraphicsItem::SceneModal);
-        added->setGeometry(QRectF(pos.x(),pos.y(),size.width(),size.height()));
+        if (event->button() == Qt::LeftButton) {
+            auto pos = event->scenePos();
+            auto node = new Node();
+            auto added = w.scene->addWidget(node);
+            node->itemInScene = added;
+            auto size = node->size();
+            // Prevent activation of other widgets in this position.
+            // If this is problematic, can try with sceneEventFilter.
+            added->setPanelModality(QGraphicsItem::SceneModal);
+            added->setGeometry(QRectF(pos.x(),pos.y(),size.width(),size.height()));
+        } else if (event->button() == Qt::RightButton) {
+            // Lol
+        }
     };
     //mainLisp();
 

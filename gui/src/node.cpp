@@ -3,25 +3,8 @@
 #include <QTextEdit>
 #include <QDebug>
 #include <vector>
-
-Node::Node(): QWidget(nullptr) {
-
-    // Useful for setting the style sheet without affecting children.
-    this->setObjectName("frame");
-    this->setStyleSheet("#frame { background-color: rgba(0,0,0,0) }");
-    this->inputs = new QHBoxLayout();
-    //exampleInput->setStyleSheet("QFrame {background-color: green}");
-    //inputsLayout->addWidget(exampleInput2);
-    auto lay = new QVBoxLayout(); // Used so that the label can resize.
-    lay->setSizeConstraint(QLayout::SetNoConstraint);
-    label.setParent(this);
-    label.setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    setText("");
-    this->setLayout(lay);
-    lay->addLayout(inputs);
-    lay->addWidget(&(this->label));
-}
-
+#include "clickablescene.h"
+#include <QMouseEvent>
 
 struct EditorInput {
     QString name = ""; // The text inside.
@@ -51,9 +34,8 @@ struct NodeEditor {
         // On creation, add the input labels as input text edits.
         //printf("Amount of children: %d\n\n", node->inputs->children().length());
         // Cannot use node->inputs->children() because the subnodes aren't children of the layout but of the widget.
-        for (int inputPos = 0; inputPos < node->inputs->count(); inputPos++) {
-            auto childLabel = qobject_cast<QLabel*> (node->inputs->itemAt(inputPos)->widget());
-            printf("\n\n%p\n\n", (void*) childLabel);
+        for (unsigned inputPos = 0; inputPos < node->inputs->count(); inputPos++) {
+            auto childLabel = qobject_cast<ClickableLabel*> (node->inputs->itemAt(inputPos)->widget());
             if (childLabel != nullptr) {
                 // And also keep track of them so that changes can be applied on accept.
                 auto inputLabel = new QLineEdit();
@@ -81,13 +63,17 @@ struct NodeEditor {
             // It is also added to the tracking vector.
         });
 
-        // On accept, use the data in the traking vector to update the inputs in the main interface.
+        // On accept, use the data in the tracking vector to update the inputs in the main interface.
         baseWidget->connect(this->ui.buttonBox, &QDialogButtonBox::accepted, [this, node]() {
             node->setText(this->ui.textEdit->toPlainText());
             foreach (auto newInputData, this->inputTracker) {
                 auto text = newInputData.name;
                 if(!newInputData.guiElement) {
-                    auto newInputLabel = new QLabel();
+                    auto newInputLabel = new ClickableLabel();
+                    newInputLabel->connect(newInputLabel, &ClickableLabel::clicked, [newInputLabel, node] () {
+                        ConnectionEnds::addPoint(findPos(top, *newInputLabel, *(node->itemInScene), *node), PointSide::end);
+                    });
+                    newInputLabel->setStyleSheet("QFrame {background-color: #ccff99}");
                     node->inputs->addWidget(newInputLabel);
                     newInputData.guiElement = newInputLabel;
                 }
@@ -98,12 +84,51 @@ struct NodeEditor {
         baseWidget->show();
     }
 };
+ConnectionEnds connectionEnds;
+Node::Node(): QWidget(nullptr) {
+
+    // Useful for setting the style sheet without affecting children.
+    this->setObjectName("frame");
+    this->setStyleSheet("#frame { background-color: rgba(0,0,0,0) }");
+    this->inputs = new QHBoxLayout();
+    this->outputs = new QHBoxLayout();
+    //inputsLayout->addWidget(exampleInput2);
+    auto lay = new QVBoxLayout(); // Used so that the label can resize.
+    lay->setSizeConstraint(QLayout::SetNoConstraint);
+    label.setParent(this);
+    label.setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    label.connect(&label, &ClickableLabel::clicked, [this] (QMouseEvent * event) {
+        if (event->button() == Qt::LeftButton) {
+            NodeEditor * editor = new NodeEditor(this);
+        }
+    });
+    setText("");
+    this->setLayout(lay);
+    lay->addLayout(inputs);
+    lay->addWidget(&(this->label));
+    auto exampleOutput = new ClickableLabel();
+    exampleOutput->setText("output");
+    exampleOutput->setStyleSheet("QFrame {background-color: #ffcc99}");
+    exampleOutput->connect(exampleOutput, &ClickableLabel::clicked, [this, exampleOutput]() {
+        ConnectionEnds::addPoint(findPos(bottom, *exampleOutput, *itemInScene, *this), PointSide::begin);
+    });
+    lay->addLayout(outputs);
+    outputs->addWidget(exampleOutput);
+}
+
+
+
 
 #include <QPushButton>
+#include <QMouseEvent>
 
+/*
 void Node::mousePressEvent(QMouseEvent *event) {
-    NodeEditor * editor = new NodeEditor(this);
+    if (event->button() == Qt::LeftButton) {
+        NodeEditor * editor = new NodeEditor(this);
+    }
 }
+*/
 
 void Node::setText(QString text) {
     this->text = text;

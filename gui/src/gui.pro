@@ -26,17 +26,18 @@ DEFINES += QT_DEPRECATED_WARNINGS
 SOURCES += \
         main.cpp \
         mainwindow.cpp \
-    diagramscene.cpp \
     clickablescene.cpp \
     mainlisp.cpp \
-    node.cpp
+    node.cpp \
+    clickablelabel.cpp
 
 HEADERS += \
         mainwindow.h \
     diagramscene.h \
     clickablescene.h \
     mainlisp.h \
-    node.h
+    node.h \
+    clickablelabel.h
 
 FORMS += \
         mainwindow.ui \
