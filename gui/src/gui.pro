@@ -33,7 +33,6 @@ SOURCES += \
 
 HEADERS += \
         mainwindow.h \
-    diagramscene.h \
     clickablescene.h \
     mainlisp.h \
     node.h \
