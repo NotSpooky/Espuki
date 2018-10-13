@@ -1,3 +1,11 @@
+// TODO: Repeat macro. Eg:
+/*
+ovejaNodes[3] = kumiko;
+sleepyNodes[3] = kumiko;
+gets translated to
+(ovejaNodes, sleepyNodes) =} _[3] = kumiko;
+*/
+
 import std.variant;
 import std.range;
 import std.algorithm;
@@ -6,13 +14,33 @@ debug import std.stdio;
 
 enum identifier = 65; // Found manually, for token.type.
 
+struct CodeBox {
+  string code;
+  CodeBox * [] dependants;
+}
+
+void topologicalSort (F)(const CodeBox * box, ref bool [CodeBox*] alreadyVisited, ref bool [CodeBox*] toVisit, F output) {
+  alreadyVisited[box] = true;
+  toVisit.remove(box);
+  foreach (dependant; box.dependants) {
+    if (dependant !in alreadyVisited) {
+      topologicalSort (dependant, alreadyVisited, toVisit, output);
+    }
+  }
+  output (box.code);
+}
+
+void process (F)(bool [CodeBox *] graphMembers, F output) {
+  bool [CodeBox*] alreadyVisited;
+  while (!graphMembers.empty) {
+    auto box = graphMembers.byKey().front;
+    topologicalSort (box, alreadyVisited, graphMembers, output);
+  }
+}
+
 void outputCode (R)(R input) {
   import std.stdio;
   write (input);
-}
-
-string getNode () {
-  return `"Hello world"` ~ "\nsplit" ~ "\nwriteln 5 7";
 }
 
 /**
@@ -23,32 +51,6 @@ auto asChain (string nodeAsText) {
   import std.string : strip;
   return nodeAsText.splitter('\n').retro.map!(a => a.strip);
 }
-
-/**
- * Transforms the text correspoding to a line into a range of input AST nodes.
- */
-auto lineAsInputAST (string line) {
-  import dparse.lexer;
-  
-}
-/+
-auto parseLine (string line, string lastValue = null) {
-  auto tokens = byToken(line);
-  if(tokens.empty) return "";
-  auto operation = tokens.front;
-  auto opType = operation.type; // D token type.
-  // This assert might not be needed.
-  assert(opType.isLiteral || opType == identifier);
-  auto expression = [operation.text];
-  if (lastValue) {
-    expression ~= lastValue;
-  }
-  return processOperation (
-      expression ~ tokens.dropOne.map!(a => a.text).array
-      , &writeln!string
-      );
-}+/
-
 
 // Might be better to make it shared.
 private uint lastId = 0;
@@ -104,7 +106,23 @@ auto processOperation (R, F)(R reverseOps, F output) {
 }
 
 void main () {
-  getNode.asChain.processOperation(&outputCode!string);
-  outputCode(";");
+
+  auto nodes = [CodeBox ("5\nmul 2"), CodeBox("10\ndivBy 2"), CodeBox("plus 4\ntostring\nwriteln 4")];
+  nodes[0].dependants = [&nodes[2]];
+  nodes[1].dependants = [&nodes[2]];
+  bool [CodeBox*] graph;
+  foreach(ref node; nodes) {
+    graph [&node] = true;
+  }
+  string[] toProcess;
+  void onTopoFind (string toAdd) {
+    toProcess ~= toAdd;
+  }
+  process(graph, &onTopoFind);
+
+  foreach_reverse(node; toProcess) {
+    node.asChain.processOperation(&outputCode!string);
+    outputCode(";\n");
+  }
   writeln(); //flush.
 }
