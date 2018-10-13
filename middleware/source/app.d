@@ -71,13 +71,13 @@ auto genVar () {
  *   output is a function to process generated code chunks.
  */
 auto processOperation (R, F)(R reverseOps, F output) {
-  if (reverseOps.empty) return ""; // No lines
+  if (reverseOps.empty) return; // No lines
 
   auto currentOp = reverseOps.front;
   reverseOps.popFront();
 
   // Empty line, continue on next one.
-  if (currentOp.empty) return processOperation(reverseOps, output);
+  if (currentOp.empty) return;
 
 
   import dparse.lexer;
@@ -101,40 +101,10 @@ auto processOperation (R, F)(R reverseOps, F output) {
   // Output rest of parameters as is.
   output (tokenizedOp.map!(a => a.text.to!string).joiner(", ").to!string);
   if (!reverseOps.empty) output(")");
-  /+
-  auto first = expression.front;
-  auto tail  = expression.dropOne; 
-  auto outputName = genVar();
-  auto outputDecl = `auto ` ~ outputName ~ ` = `;
-  if (tail.empty) {
-    output(outputDecl ~ first ~ ';');
-  } else {
-    output(outputDecl ~ first ~ '(' ~ `);`);
-  }
-  return outputName;
-  +/
-  return "";
 }
-
-
-
-/+
-auto functionChain (R)(R input) {
-  import std.string;
-  auto steps = input.map!(a => a.strip).retro;
-  return steps;
-}
-
-// TODO: Optimize concatenation.
-auto functionChainRec (R)(R steps) {
-  if (steps.empty) {
-    return "";
-  } else {
-    return steps.front.to!string ~ '(' ~ functionChainRec (steps.dropOne) ~ ')'; 
-  }
-}+/
 
 void main () {
   getNode.asChain.processOperation(&outputCode!string);
+  outputCode(";");
   writeln(); //flush.
 }
