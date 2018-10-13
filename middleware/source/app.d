@@ -19,6 +19,11 @@ struct Err {
   int type = ErrT.noError;
 }
 
+struct Parameter {
+  string name;
+  string dependencyValue;
+}
+
 struct CodeBox {
   @disable this();
   this (string code, uint dependencyCount = 0) {
@@ -93,6 +98,9 @@ auto genVar () {
 auto processOperation (F)(const CodeBox * node, F output) {
   auto firstLine = node.dependenciesIds.length ? node.dependenciesIds[0] : "";
   auto toProcess = node.code.asChain.array ~ firstLine;
+  if (!node.dependants.empty) {
+    output(`auto ` ~ node.id ~ ` = `);
+  }
   processOperationAux (node, toProcess, output);
 }
 
