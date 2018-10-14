@@ -98,6 +98,39 @@ auto genVar () {
   return `var` ~ lastId.to!string;
 }
 
+struct Param {
+  string identifier;
+  string typeName;
+}
+
+auto defun (F)(string identifier, Param [] params, bool [CodeBox*] codeGraph, F output, ref Scope scope_, ref Err err, string retType = `auto`) {
+  // TODO: Add a level of scope so that _Number works correctly and internal
+  // variables get the correct scope too.
+  const (CodeBox) * [] toProcess;
+  void onTopoFind (const CodeBox* toAdd) {
+    toProcess ~= toAdd;
+  }
+  // Generates the reverse ordering.
+  topologicalSort (codeGraph, &onTopoFind);
+
+  auto paramString =
+    params
+    .map! (a => a.typeName ~ ' ' ~ a.identifier)
+    .joiner (" ")
+    .to!string;
+  output(retType ~ ' ' ~ identifier ~ " (" ~ paramString ~ ") {\n");
+  foreach_reverse(node; toProcess) {
+    node.processOperation(scope_, &outputCode!string, err);
+    if (err.type != ErrT.noError) {
+      writeln ("Error processing node: ", node);
+      return;
+    }
+    output(";\n");
+  }
+  output("\n}\n");
+  writeln(); //flush.
+}
+
 auto processOperation (F)(const CodeBox * node, ref Scope scope_, F output, ref Err err) {
   auto nodeDeps = node.dependenciesIds;
   // TODO: Add in(node)
@@ -200,6 +233,7 @@ private auto processOperationAux (R, F)(const CodeBox * node, ref R reverseOps, 
 
 void main () {
 
+  Scope scope_;
   auto nodes = [CodeBox ("5\nmul 2"), CodeBox("10\ndivBy 2"), CodeBox("plus _1\ntostring\nwriteln 4", 2)];
   Err err;
   nodes[0].addAsArgument (&nodes[2], 0, err);
@@ -209,22 +243,9 @@ void main () {
   }
   // TODO: Check that all arguments are satisfied/have default values.
   bool [CodeBox*] graph;
-  foreach(ref node; nodes) {
+  foreach (ref node; nodes) {
     graph [&node] = true;
   }
-  const (CodeBox) * [] toProcess;
-  void onTopoFind (const CodeBox* toAdd) {
-    toProcess ~= toAdd;
-  }
-  topologicalSort(graph, &onTopoFind);
-  Scope scope_;
-
-  foreach_reverse(node; toProcess) {
-    node.processOperation(scope_, &outputCode!string, err);
-    if (err.type != ErrT.noError) {
-      writeln ("Error processing node: ", node);
-    }
-    outputCode(";\n");
-  }
-  writeln(); //flush.
+  defun (`main`, [], graph.dup, &outputCode!string, scope_, err, `void`);
+  defun (`mainWithParams`, [Param(`args`, `string[]`)], graph.dup, &outputCode!string, scope_, err, `void`);
 }
