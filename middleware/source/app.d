@@ -103,9 +103,17 @@ struct Param {
   string typeName;
 }
 
+auto defstruct (F)(string identifier, Param [] params, F output) {
+  auto memberString = 
+    params
+    .map! (a => a.typeName ~ ' ' ~ a.identifier)
+    .joiner (";\n")
+    .to!string;
+  output(`struct ` ~ identifier ~ " {\n" ~ memberString ~ "\n}\n");
+}
+
 auto defun (F)(string identifier, Param [] params, bool [CodeBox*] codeGraph, F output, ref Scope scope_, ref Err err, string retType = `auto`) {
-  // TODO: Add a level of scope so that _Number works correctly and internal
-  // variables get the correct scope too.
+  // Note: Doesn't add an initial level to scope_
   const (CodeBox) * [] toProcess;
   void onTopoFind (const CodeBox* toAdd) {
     toProcess ~= toAdd;
@@ -116,7 +124,7 @@ auto defun (F)(string identifier, Param [] params, bool [CodeBox*] codeGraph, F 
   auto paramString =
     params
     .map! (a => a.typeName ~ ' ' ~ a.identifier)
-    .joiner (" ")
+    .joiner (", ")
     .to!string;
   output(retType ~ ' ' ~ identifier ~ " (" ~ paramString ~ ") {\n");
   foreach_reverse(node; toProcess) {
@@ -246,6 +254,7 @@ void main () {
   foreach (ref node; nodes) {
     graph [&node] = true;
   }
+  defstruct (`exampleStruct`, [Param (`testInt`, `int`)], &outputCode!string);
   defun (`main`, [], graph.dup, &outputCode!string, scope_, err, `void`);
-  defun (`mainWithParams`, [Param(`args`, `string[]`)], graph.dup, &outputCode!string, scope_, err, `void`);
+  defun (`mainWithParams`, [Param (`args`, `string[]`)], graph.dup, &outputCode!string, scope_, err, `void`);
 }
