@@ -12,9 +12,11 @@ import std.algorithm;
 import std.conv : to;
 debug import std.stdio;
 
-enum identifier = 65; // Found manually, for token.type.
+enum identifier = 65; // Found manually, for token.type from libdparse.
 
-enum ErrT {noError, outOfBounds};
+// Used to avoid exceptions as after the bootstrapping exceptions probably
+// won't be used either.
+enum ErrT {noError, outOfBounds, doesntExist};
 struct Err {
   int type = ErrT.noError;
 }
@@ -24,6 +26,7 @@ struct Parameter {
   string dependencyValue;
 }
 
+// Represents a node of the graph in the UI.
 struct CodeBox {
   @disable this();
   this (string code, uint dependencyCount = 0) {
@@ -95,13 +98,50 @@ auto genVar () {
   return `var` ~ lastId.to!string;
 }
 
-auto processOperation (F)(const CodeBox * node, F output) {
-  auto firstLine = node.dependenciesIds.length ? node.dependenciesIds[0] : "";
+auto processOperation (F)(const CodeBox * node, ref Scope scope_, F output, ref Err err) {
+  auto nodeDeps = node.dependenciesIds;
+  // TODO: Add in(node)
+  string[string] scopeMappingsToAdd;
+  foreach(index, internalVar; nodeDeps) {
+    if (!internalVar) {
+      err.type = ErrT.doesntExist;
+      return;
+    }
+    scopeMappingsToAdd["_" ~ index.to!string] = internalVar;
+  }
+  scope_.addLevel (scopeMappingsToAdd);
+  scope (exit) scope_.scopeMap = scope_.scopeMap[0..$-1];
+  auto firstLine = nodeDeps.length ? nodeDeps[0] : "";
   auto toProcess = node.code.asChain.array ~ firstLine;
   if (!node.dependants.empty) {
     output(`auto ` ~ node.id ~ ` = `);
   }
-  processOperationAux (node, toProcess, output);
+  processOperationAux (node, toProcess, scope_, output, err);
+}
+
+struct Scope {
+  string [string][] scopeMap; // First dimension is the stack depth.
+  void addLevel (string [string] mappings) {
+    scopeMap ~= mappings;
+  }
+  auto opIndex (string userIdentifier, ref Err err) {
+    foreach_reverse (mappings; scopeMap) {
+      auto p = userIdentifier in mappings;
+      if (p) return *p;
+    }
+    err.type = ErrT.doesntExist;
+    return "";
+  }
+}
+
+auto mapToScope (string str, ref Scope scope_) {
+  Err err;
+  auto internalName = scope_[str, err];
+  if (err.type == ErrT.doesntExist) {
+    return str;
+  } else {
+    return internalName;
+  }
 }
 
 /**
@@ -112,7 +152,7 @@ auto processOperation (F)(const CodeBox * node, F output) {
  * Returns:
  *   whether this produced a result that has output.
  */
-private auto processOperationAux (R, F)(const CodeBox * node, ref R reverseOps, F output) {
+private auto processOperationAux (R, F)(const CodeBox * node, ref R reverseOps, ref Scope scope_, F output, ref Err err) {
   if (reverseOps.empty) return false; // No lines
 
   auto currentOp = reverseOps.front;
@@ -134,9 +174,11 @@ private auto processOperationAux (R, F)(const CodeBox * node, ref R reverseOps, 
   tokenizedOp.popFront();
 
   output(currentOpHeader);
-  string tacitArgument;
+  // Argument that comes from the first input of the code box.
+  // There might not be one.
+  string tacitArgument; 
   // Skip until there's output.
-  while ((!reverseOps.empty) && !processOperationAux(node, reverseOps, ((string a) => tacitArgument ~= a))) {}
+  while ((!reverseOps.empty) && !processOperationAux(node, reverseOps, scope_, ((string a) => tacitArgument ~= a), err)) {}
   // Last operation doesn't need parens.
   bool addParens = tacitArgument || !tokenizedOp.empty;
   if (addParens) output ("(");
@@ -146,14 +188,19 @@ private auto processOperationAux (R, F)(const CodeBox * node, ref R reverseOps, 
     if (!tokenizedOp.empty) output (", ");
   }
   // Output rest of parameters as is.
-  output (tokenizedOp.map!(a => a.text.to!string).joiner(", ").to!string);
+  output (
+      tokenizedOp
+      .map!(a => a.text.to!string.mapToScope(scope_))
+      .joiner(", ")
+      .to!string
+  );
   if (addParens) output(")");
   return true;
 }
 
 void main () {
 
-  auto nodes = [CodeBox ("5\nmul 2"), CodeBox("10\ndivBy 2"), CodeBox("plus 4\ntostring\nwriteln 4", 2)];
+  auto nodes = [CodeBox ("5\nmul 2"), CodeBox("10\ndivBy 2"), CodeBox("plus _1\ntostring\nwriteln 4", 2)];
   Err err;
   nodes[0].addAsArgument (&nodes[2], 0, err);
   nodes[1].addAsArgument (&nodes[2], 1, err);
@@ -170,9 +217,13 @@ void main () {
     toProcess ~= toAdd;
   }
   topologicalSort(graph, &onTopoFind);
+  Scope scope_;
 
   foreach_reverse(node; toProcess) {
-    node.processOperation(&outputCode!string);
+    node.processOperation(scope_, &outputCode!string, err);
+    if (err.type != ErrT.noError) {
+      writeln ("Error processing node: ", node);
+    }
     outputCode(";\n");
   }
   writeln(); //flush.
